@@ -44,6 +44,16 @@ class WM_OT_encrypted_transfer(bpy.types.Operator):
         description="Enter the username of the intended recipient",
     )
 
+    # destination fields
+    dest_ip: bpy.props.StringProperty(
+        name="Destination",
+        description="Enter the name of the remote host of the recipient",
+    )
+    dest_port: bpy.props.StringProperty(
+        name="port",
+        description="Enter the port on the remote host",
+    )
+
     # define a path input for the user to locate their signing keys
     local_key_path: bpy.props.StringProperty(
         name="Local Keys", description="Select which keys to use", subtype="DIR_PATH"
@@ -60,16 +70,21 @@ class WM_OT_encrypted_transfer(bpy.types.Operator):
         layout.prop(self, "local_key_path")
         layout.prop(self, "key_provider")
         layout.prop(self, "recipient_username")
+        layout.prop(self, "dest_ip")
+        layout.prop(self, "dest_port")
 
     # execute runs upon completion of the dialogue
     def execute(self, context):
         key_provider = self.key_provider
         local_key_path = self.local_key_path
         username = self.recipient_username
+        dest_ip = self.dest_ip
+        dest_port = int(self.dest_port)
         self.report(
             {"INFO"},
             f"Selected provider: {key_provider}, Key path: {local_key_path}, Username: {username}",
         )
+        self.report({"INFO"}, f"Destination: {dest_ip}:{dest_port}")
 
         if key_provider == "key_provider_github":
             key_provider = "github"
@@ -95,29 +110,56 @@ class WM_OT_encrypted_transfer(bpy.types.Operator):
         bpy.ops.wm.save_mainfile(filepath=save_path)
         blender_data = read_file(save_path)
 
-        # try encrypting the file
+        # generate a signature of the file using our local private key
+        # so our recipient can verify our identity when they receive it
+        signature = sign_data(local_privkey, blender_data)
+
+        # put all of the sensitive info into a struct so we can encrypt it together
+        data_to_be_sym_encrypted = json.dumps(
+            {
+                "recipient": username,
+                "blender_data": base64.b64encode(blender_data).decode("utf-8"),
+                "signature": base64.b64encode(signature).decode("utf-8"),
+            }
+        ).encode("utf-8")
+
+        # put our symmetric key and nonce asymmetrically with the recipient's public key
+        # they will decrypt with their private key
+        data_to_be_asym_encrypted = json.dumps(
+            {
+                "symmetric_key": base64.b64encode(symmetric_key).decode("utf-8"),
+                "nonce": base64.b64encode(nonce).decode("utf-8"),
+            }
+        ).encode("utf-8")
+
+        # try encrypting the data
         try:
-            cipher_data = sym_encrypt_data(symmetric_key, nonce, blender_data)
-            # save_path = r"C:\Users\zacha\Desktop\scene.blend.cipher.tmp"
-            # write_file(cipher_data, save_path)
+            sym_encrypted_data = sym_encrypt_data(
+                symmetric_key, nonce, data_to_be_sym_encrypted
+            )
         except OverflowError:
             self.report(
                 {"ERROR"},
                 "This file is too large to encrypt. Files must be less than 2GB in size.",
             )
 
+        asym_encrypted_data = asym_encrypt_data(
+            remote_pubkey, data_to_be_asym_encrypted
+        )
+
         # create a json object for sending our data
         packet = {
-            "symmetric_key": base64.b64encode(symmetric_key).decode("utf-8"),
-            "nonce": base64.b64encode(nonce).decode("utf-8"),
-            "encrypted_data": base64.b64encode(cipher_data).decode("utf-8"),
+            "asym_encrypted_data": base64.b64encode(asym_encrypted_data).decode(
+                "utf-8"
+            ),
+            "sym_encrypted_data": base64.b64encode(sym_encrypted_data).decode("utf-8"),
         }
         data = json.dumps(packet).encode("utf-8")
 
         # try sending encrypted data to a listener
         # in this POC, this is just another program on this machine
-        host = socket.gethostname()
-        port = 4567
+        host = dest_ip
+        port = dest_port
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(5)
         try:

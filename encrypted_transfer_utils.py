@@ -97,3 +97,34 @@ def asym_decrypt_data(asym_private_key, data):
         ),
     )
     return decrypted_data
+
+
+# signs a piece of data with a private key
+# the identity of the signer can be later confirmed
+# by another party by verifying with the associated public key
+def sign_data(private_key, data):
+    return private_key.sign(
+        data,
+        padding.PSS(
+            mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH
+        ),
+        hashes.SHA256(),
+    )
+
+
+# verifies a that a signature was made with the private key associated with a given public key
+def verify_data(public_key, data, signature):
+    try:
+        # test the signature against the public key
+        public_key.verify(
+            signature,
+            data,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()), salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256(),
+        )
+        return True
+    except Exception:
+        # an exception is raised if the verification fails so we catch it here and return False
+        return False

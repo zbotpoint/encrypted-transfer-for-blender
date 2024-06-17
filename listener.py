@@ -25,10 +25,11 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
 packet = json.loads(data)
 print("Received all data")
 
-sender_public_key_path = r"C:\Users\zacha\Desktop\keys\id_rsa.pub"
+# sender_public_key_path = r"C:\Users\zacha\Desktop\keys\id_rsa.pub"
 sender_pubkey = cryptography.hazmat.primitives.serialization.load_ssh_public_key(
     read_file(sender_public_key_path)
 )
+sender_pubkey = fetch_remote_public_key(key_provider, username)
 
 local_privkey = cryptography.hazmat.primitives.serialization.load_ssh_private_key(
     read_file(r"C:\Users\zacha\.ssh\id_rsa"), None
@@ -58,13 +59,15 @@ try:
         print("Signature authenticated.")
 
         # write the decrypted data to a .blend file
-        save_path = r"C:\Users\zacha\Desktop\scene.unencrypted.blend"
+        save_path = r"C:\Users\zacha\Documents\Projects\encrypted-transfer-for-blender\scene.unencrypted.blend"
         write_file(blender_data, save_path)
+        print("Saved to file.")
 
         blender_exe_path = (
             r"C:\Program Files\Blender Foundation\Blender 4.1\blender.exe"
         )
-        call([blender_exe_path, save_path])
+        # call([blender_exe_path, save_path])
+
     else:
         print("Signature could not authenticate.")
 

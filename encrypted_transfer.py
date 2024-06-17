@@ -106,7 +106,7 @@ class WM_OT_encrypted_transfer(bpy.types.Operator):
         symmetric_key, nonce = generate_sym_key_nonce()
 
         # save our .blend file to a temp location and load it
-        save_path = r"C:\Users\zacha\Desktop\scene.blend.tmp"
+        save_path = r"C:\Users\zacha\AppData\Local\Temp\scene.blend.tmp"
         bpy.ops.wm.save_mainfile(filepath=save_path)
         blender_data = read_file(save_path)
 

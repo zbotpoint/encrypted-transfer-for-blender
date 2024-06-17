@@ -1,4 +1,14 @@
 import bpy
+from encrypted_transfer_utils import *
+
+bl_info = {
+    "name": "Encrypted Transfer for Blender",
+    "author": "zbotpoint",
+    "version": (1, 0),
+    "blender": (2, 65, 0),
+    "description": "Transfer Blender files securely to a remote location",
+    "category": "Import-Export",
+}
 
 
 # operator class for our encrypted transfer dialogue
@@ -22,6 +32,8 @@ class WM_OT_encrypted_transfer(bpy.types.Operator):
 
     # execute runs upon completion of the dialogue
     def execute(self, context):
+        sym_key, nonce = generate_sym_key_nonce()
+        print(nonce)
         return {"FINISHED"}
 
 

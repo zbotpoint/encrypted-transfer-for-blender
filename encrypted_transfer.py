@@ -1,4 +1,8 @@
 import bpy
+import socket
+import json
+import base64
+
 from encrypted_transfer_utils import *
 
 bl_info = {
@@ -91,38 +95,44 @@ class WM_OT_encrypted_transfer(bpy.types.Operator):
         bpy.ops.wm.save_mainfile(filepath=save_path)
         blender_data = read_file(save_path)
 
-        # try encrypting the file and writing it to a temp location
+        # try encrypting the file
         try:
             cipher_data = sym_encrypt_data(symmetric_key, nonce, blender_data)
-            save_path = r"C:\Users\zacha\Desktop\scene.blend.cipher.tmp"
-            write_file(cipher_data, save_path)
+            # save_path = r"C:\Users\zacha\Desktop\scene.blend.cipher.tmp"
+            # write_file(cipher_data, save_path)
         except OverflowError:
             self.report(
                 {"ERROR"},
                 "This file is too large to encrypt. Files must be less than 2GB in size.",
             )
 
-        ###### After this line, we pretend we are the recipient for testing purposes
+        # create a json object for sending our data
+        packet = {
+            "symmetric_key": base64.b64encode(symmetric_key).decode("utf-8"),
+            "nonce": base64.b64encode(nonce).decode("utf-8"),
+            "encrypted_data": base64.b64encode(cipher_data).decode("utf-8"),
+        }
+        data = json.dumps(packet).encode("utf-8")
 
-        # receive the key and nonce from the blender user
-
-        # try to decrypt the file
+        # try sending encrypted data to a listener
+        # in this POC, this is just another program on this machine
+        host = socket.gethostname()
+        port = 4567
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(5)
         try:
-            cipher_data = read_file(r"C:\Users\zacha\Desktop\scene.blend.cipher.tmp")
-            unencrypted_data = sym_decrypt_data(symmetric_key, nonce, cipher_data)
-        except cryptography.exceptions.InvalidTag:
+            s.connect((host, port))
+            s.sendall(data)
+            s.close()
+            self.report(
+                {"INFO"},
+                f"Sent {len(data)} bytes to {host}:{port} successfully.",
+            )
+        except socket.error:
             self.report(
                 {"ERROR"},
-                "Authentication tag for this file failed to validate. The data has been modified or decryption failed.",
+                f"Failed to connect to remote at {host}:{port}.",
             )
-
-        # write the decrypted data to a .blend file
-        save_path = r"C:\Users\zacha\Desktop\scene.clear.blend"
-        write_file(unencrypted_data, save_path)
-
-        # try to open the decrypted file
-        # this should open and be identical to how the file was before running the add-on
-        bpy.ops.wm.open_mainfile(filepath=save_path)
 
         return {"FINISHED"}
 
